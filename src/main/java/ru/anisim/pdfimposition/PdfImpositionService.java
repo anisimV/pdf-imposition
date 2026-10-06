@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.util.Matrix;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
@@ -18,12 +19,32 @@ public class PdfImpositionService {
     // Координаты из образца, в PDF-пунктах.
     // Начало координат — снизу слева.
     private final ImpositionLayout layout;
+    private final float inputBleedMm;
 
     public PdfImpositionService(ImpositionLayout layout) {
+        this(layout, 0f);
+    }
+
+    public PdfImpositionService(
+            ImpositionLayout layout,
+            float inputBleedMm
+    ) {
         this.layout = Objects.requireNonNull(
                 layout,
                 "Настройки спуска обязательны"
         );
+
+        if (!Float.isFinite(inputBleedMm) || inputBleedMm < 0) {
+            throw new IllegalArgumentException(
+                    "Вылеты должны быть конечным неотрицательным числом"
+            );
+        }
+
+        this.inputBleedMm = inputBleedMm;
+    }
+
+    public String getLayoutName() {
+        return layout.name();
     }
 
     public void impose(Path inputPath, Path outputPath) throws IOException {
@@ -47,25 +68,16 @@ public class PdfImpositionService {
                      pageIndex++) {
 
                     var sourcePage = source.getPage(pageIndex);
-                    var trimBox = sourcePage.getTrimBox();
+                    var trimBox = resolveTrimBox(
+                            sourcePage.getTrimBox(),
+                            sourcePage.getMediaBox(),
+                            pageIndex
+                    );
 
                     if (sourcePage.getRotation() != 0) {
                         throw new IOException(
                                 "Страница " + (pageIndex + 1)
                                         + ": сначала уберите поворот страницы"
-                        );
-                    }
-
-                    if (Math.abs(trimBox.getWidth()
-                            - millimetersToPoints(layout.artworkWidthMm())) > 0.6f
-                            || Math.abs(trimBox.getHeight()
-                            - millimetersToPoints(layout.artworkHeightMm())) > 0.6f) {
-
-                        throw new IOException(
-                                "Страница " + (pageIndex + 1)
-                                        + ": граница реза TrimBox должна быть "
-                                        + layout.artworkWidthMm() + " × "
-                                        + layout.artworkHeightMm() + " мм"
                         );
                     }
 
@@ -143,5 +155,62 @@ public class PdfImpositionService {
 
     private float millimetersToPoints(float millimeters) {
         return millimeters * 72 / 25.4f;
+    }
+
+    private boolean matchesSize(
+            PDRectangle box,
+            float width,
+            float height
+    ) {
+        return Math.abs(box.getWidth() - width) <= 0.6f
+                && Math.abs(box.getHeight() - height) <= 0.6f;
+    }
+
+    private PDRectangle resolveTrimBox(
+            PDRectangle trimBox,
+            PDRectangle mediaBox,
+            int pageIndex
+    ) throws IOException {
+        var width = millimetersToPoints(layout.artworkWidthMm());
+        var height = millimetersToPoints(layout.artworkHeightMm());
+
+        // Если граница реза уже правильная, используем её.
+        if (matchesSize(trimBox, width, height)) {
+            return trimBox;
+        }
+
+        var bleed = millimetersToPoints(inputBleedMm);
+
+        // Восстанавливаем границу реза только при явно заданных
+        // вылетах и совпадении размеров исходной страницы.
+        if (inputBleedMm > 0
+                && matchesSize(mediaBox, width + 2 * bleed, height + 2 * bleed)
+                && matchesSize(
+                trimBox,
+                mediaBox.getWidth(),
+                mediaBox.getHeight()
+        )
+                && Math.abs(trimBox.getLowerLeftX()
+                - mediaBox.getLowerLeftX()) <= 0.6f
+                && Math.abs(trimBox.getLowerLeftY()
+                - mediaBox.getLowerLeftY()) <= 0.6f) {
+
+            return new PDRectangle(
+                    mediaBox.getLowerLeftX()
+                            + (mediaBox.getWidth() - width) / 2,
+                    mediaBox.getLowerLeftY()
+                            + (mediaBox.getHeight() - height) / 2,
+                    width,
+                    height
+            );
+        }
+
+        throw new IOException(
+                "Страница " + (pageIndex + 1)
+                        + ": TrimBox должен быть "
+                        + layout.artworkWidthMm() + " × "
+                        + layout.artworkHeightMm() + " мм"
+                        + ". Проверьте размер страницы и вылеты."
+        );
     }
 }

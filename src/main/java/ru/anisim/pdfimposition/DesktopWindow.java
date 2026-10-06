@@ -32,7 +32,11 @@ public class DesktopWindow {
         List<Path> inputPaths = Arrays.stream(chooser.getSelectedFiles()).map(file -> file.toPath()).toList();
 
         // Создаём сервисы обработки
-        var pdfService = new PdfImpositionService(ImpositionLayouts.A5);
+       // var pdfService = new PdfImpositionService(ImpositionLayouts.A5);
+        var pdfService = new PdfImpositionService(
+                ImpositionLayouts.A6,
+                5f
+        );
         var batchService = new BatchImpositionService(pdfService);
 
         // Обрабатываем файлы в фоновом потоке
