@@ -11,13 +11,20 @@ import org.apache.pdfbox.util.Matrix;
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
+import java.util.Objects;
 
 public class PdfImpositionService {
 
     // Координаты из образца, в PDF-пунктах.
     // Начало координат — снизу слева.
-    private final ImpositionLayout layout = ImpositionLayouts.A5;
+    private final ImpositionLayout layout;
+
+    public PdfImpositionService(ImpositionLayout layout) {
+        this.layout = Objects.requireNonNull(
+                layout,
+                "Настройки спуска обязательны"
+        );
+    }
 
     public void impose(Path inputPath, Path outputPath) throws IOException {
         try (var templateStream = PdfImpositionService.class
