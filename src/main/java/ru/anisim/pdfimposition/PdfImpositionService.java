@@ -17,31 +17,16 @@ public class PdfImpositionService {
 
     // Координаты из образца, в PDF-пунктах.
     // Начало координат — снизу слева.
-    private static final List<ArtworkPlacement> A5_PLACEMENTS = List.of(
-            new ArtworkPlacement(
-                    28.34f, 643.46f,
-                    -14.17f, -5.67f, 439.37f, 615.12f
-            ),
-            new ArtworkPlacement(
-                    459.21f, 643.46f,
-                    -5.67f, -5.67f, 439.37f, 615.12f
-            ),
-            new ArtworkPlacement(
-                    28.34f, 36.85f,
-                    -14.17f, -14.17f, 439.37f, 615.12f
-            ),
-            new ArtworkPlacement(
-                    459.21f, 36.85f,
-                    -5.67f, -14.17f, 439.37f, 615.12f
-            )
-    );
+    private final ImpositionLayout layout = ImpositionLayouts.A5;
 
     public void impose(Path inputPath, Path outputPath) throws IOException {
         try (var templateStream = PdfImpositionService.class
-                .getResourceAsStream("/a5-template.pdf")) {
+                .getResourceAsStream(layout.templateResource())) {
 
             if (templateStream == null) {
-                throw new IOException("Не найден шаблон a5-template.pdf");
+                throw new IOException(
+                        "Не найден шаблон: " + layout.templateResource()
+                );
             }
 
             try (var source = Loader.loadPDF(inputPath.toFile());
@@ -65,14 +50,15 @@ public class PdfImpositionService {
                     }
 
                     if (Math.abs(trimBox.getWidth()
-                            - millimetersToPoints(148)) > 0.6f
+                            - millimetersToPoints(layout.artworkWidthMm())) > 0.6f
                             || Math.abs(trimBox.getHeight()
-                            - millimetersToPoints(210)) > 0.6f) {
+                            - millimetersToPoints(layout.artworkHeightMm())) > 0.6f) {
 
                         throw new IOException(
                                 "Страница " + (pageIndex + 1)
-                                        + ": граница реза TrimBox должна "
-                                        + "быть 148 × 210 мм"
+                                        + ": граница реза TrimBox должна быть "
+                                        + layout.artworkWidthMm() + " × "
+                                        + layout.artworkHeightMm() + " мм"
                         );
                     }
 
@@ -94,7 +80,7 @@ public class PdfImpositionService {
                             true,
                             true
                     )) {
-                        for (var placement : A5_PLACEMENTS) {
+                        for (var placement : layout.placements()) {
                             drawArtwork(
                                     content,
                                     artwork,
