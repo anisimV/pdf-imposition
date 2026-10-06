@@ -12,10 +12,24 @@ import java.util.concurrent.ExecutionException;
 public class DesktopWindow {
 
     public void show() {
+
+        var formats = new String[]{"А5 — 4 копии", "А6 — 8 копий"};
+
+        var formatIndex = JOptionPane.showOptionDialog(null, "Выберите формат макетов", "Формат спуска", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, formats, formats[0]);
+
+        if (formatIndex == JOptionPane.CLOSED_OPTION) {
+            return;
+        }
+
+        var layout = switch (formatIndex) {
+            case 0 -> ImpositionLayouts.A5;
+            case 1 -> ImpositionLayouts.A6;
+            default -> throw new IllegalStateException("Неизвестный формат: " + formatIndex);
+        };
         // Создаём и настраиваем окно выбора файлов
         var chooser = new JFileChooser();
 
-        chooser.setDialogTitle("Выберите макеты PDF");
+        chooser.setDialogTitle("Выберите макеты PDF формата " + layout.name());
         chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
         chooser.setMultiSelectionEnabled(true);
         chooser.setFileFilter(new FileNameExtensionFilter("PDF-файлы", "pdf"));
@@ -32,7 +46,20 @@ public class DesktopWindow {
         List<Path> inputPaths = Arrays.stream(chooser.getSelectedFiles()).map(file -> file.toPath()).toList();
 
         // Создаём сервисы обработки
-        var pdfService = new PdfImpositionService();
+        // var pdfService = new PdfImpositionService(ImpositionLayouts.A5);
+        var inputBleedMm = switch (formatIndex) {
+            case 0 -> 0f;
+            case 1 -> 5f;
+            default -> throw new IllegalStateException(
+                    "Неизвестный формат: " + formatIndex
+            );
+        };
+
+        var pdfService = new PdfImpositionService(
+                layout,
+                inputBleedMm
+        );
+
         var batchService = new BatchImpositionService(pdfService);
 
         // Обрабатываем файлы в фоновом потоке
