@@ -43,11 +43,13 @@ public class BatchImpositionService {
 
         var baseName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
 
-        var outputPath = directory.resolve(baseName + "_А5_SRA3.pdf");
+        var outputBaseName = baseName + "_" + pdfService.getLayoutName() + "_SRA3";
+
+        var outputPath = directory.resolve(outputBaseName + ".pdf");
         var number = 1;
 
         while (Files.exists(outputPath)) {
-            outputPath = directory.resolve(baseName + "_А5_SRA3_" + number + ".pdf");
+            outputPath = directory.resolve(outputBaseName + "_" + number + ".pdf");
             number++;
         }
 
