@@ -29,6 +29,48 @@ public final class ImpositionLayouts {
             )
     );
 
+    public static final ImpositionLayout A6 = new ImpositionLayout(
+            "А6",
+            "/a6-template.pdf",
+            105f,
+            148f,
+            List.of(
+                    new ArtworkPlacement(
+                            25.51f, 459.21f,
+                            -14.17f, -5.67f, 317.48f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            25.51f, 28.35f,
+                            -14.17f, -14.17f, 317.48f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            334.49f, 459.21f,
+                            -5.67f, -5.67f, 308.98f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            334.49f, 28.35f,
+                            -5.67f, -14.17f, 308.98f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            643.46f, 459.21f,
+                            -5.67f, -5.67f, 308.98f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            643.46f, 28.35f,
+                            -5.67f, -14.17f, 308.98f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            952.44f, 459.21f,
+                            -5.67f, -5.67f, 317.48f, 439.37f
+                    ),
+                    new ArtworkPlacement(
+                            952.44f, 28.35f,
+                            -5.67f, -14.17f, 317.48f, 439.37f
+                    )
+            )
+    );
+
+
     private ImpositionLayouts() {
     }
 }
