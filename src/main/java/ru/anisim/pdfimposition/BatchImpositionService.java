@@ -14,13 +14,13 @@ public class BatchImpositionService {
         this.pdfService = pdfService;
     }
 
-    public List<String> process(List<Path> inputPaths) {
+    public List<String> process(List<Path> inputPaths, Path destinationDirectory) {
         List<String> results = new ArrayList<>();
 
         for (var inputPath : inputPaths) {
             try {
                 var source = inputPath.toAbsolutePath().normalize();
-                var outputDirectory = source.getParent().resolve("спуски");
+                var outputDirectory = destinationDirectory.toAbsolutePath().normalize().resolve("спуски");
 
                 Files.createDirectories(outputDirectory);
 
