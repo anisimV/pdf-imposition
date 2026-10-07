@@ -13,7 +13,11 @@ public class DesktopWindow {
 
     public void show() {
 
-        var formats = new String[]{"А5 — 4 копии", "А6 — 8 копий"};
+        var formats = new String[]{
+                "А5 — 4 копии",
+                "А6 — 8 копий",
+                "А7 — 18 копий"
+        };
 
         var formatIndex = JOptionPane.showOptionDialog(null, "Выберите формат макетов", "Формат спуска", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, formats, formats[0]);
 
@@ -24,6 +28,7 @@ public class DesktopWindow {
         var layout = switch (formatIndex) {
             case 0 -> ImpositionLayouts.A5;
             case 1 -> ImpositionLayouts.A6;
+            case 2 -> ImpositionLayouts.A7;
             default -> throw new IllegalStateException("Неизвестный формат: " + formatIndex);
         };
         // Создаём и настраиваем окно выбора файлов
@@ -50,6 +55,7 @@ public class DesktopWindow {
         var inputBleedMm = switch (formatIndex) {
             case 0 -> 0f;
             case 1 -> 5f;
+            case 2 -> 0f;
             default -> throw new IllegalStateException(
                     "Неизвестный формат: " + formatIndex
             );
