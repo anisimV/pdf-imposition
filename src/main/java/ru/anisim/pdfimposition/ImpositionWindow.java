@@ -21,12 +21,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import javax.swing.JProgressBar;
 
 public class ImpositionWindow {
 
     private final JFrame frame;
     private final JComboBox<String> formatBox;
     private final DefaultListModel<Path> filesModel;
+    private final JProgressBar progressBar;
 
     private final JButton addButton;
     private final JButton clearButton;
@@ -61,8 +63,16 @@ public class ImpositionWindow {
         controls.add(addButton);
         controls.add(clearButton);
 
+        progressBar = new JProgressBar();
+        progressBar.setStringPainted(true);
+        progressBar.setString("Ожидание");
+
+        var progressPanel = new JPanel(new BorderLayout(0, 5));
+        progressPanel.add(statusLabel, BorderLayout.NORTH);
+        progressPanel.add(progressBar, BorderLayout.CENTER);
+
         var bottomPanel = new JPanel(new BorderLayout(10, 0));
-        bottomPanel.add(statusLabel, BorderLayout.CENTER);
+        bottomPanel.add(progressPanel, BorderLayout.CENTER);
         bottomPanel.add(processButton, BorderLayout.EAST);
 
         var panel = new JPanel(new BorderLayout(10, 10));
@@ -165,17 +175,42 @@ public class ImpositionWindow {
         setProcessing(true);
         statusLabel.setText("Обработка " + layout.name() + ": файлов — " + inputPaths.size());
 
-        var worker = new SwingWorker<List<String>, Void>() {
+        var worker = new SwingWorker<List<String>, Integer>() {
 
             @Override
             protected List<String> doInBackground() {
-                return batchService.process(inputPaths, destinationDirectory);
+                return batchService.process(
+                        inputPaths,
+                        destinationDirectory,
+                        completed -> publish(completed)
+                );
+            }
+
+            @Override
+            protected void process(List<Integer> chunks) {
+                var completed = chunks.get(chunks.size() - 1);
+
+                progressBar.setValue(completed);
+                progressBar.setString(
+                        "Обработано " + completed + " из " + inputPaths.size()
+                );
+
+                statusLabel.setText(
+                        "Обработка " + layout.name()
+                                + ": " + completed + " из " + inputPaths.size()
+                );
             }
 
             @Override
             protected void done() {
                 try {
                     var results = get();
+
+                    progressBar.setValue(inputPaths.size());
+                    progressBar.setString(
+                            "Обработано " + inputPaths.size()
+                                    + " из " + inputPaths.size()
+                    );
 
                     statusLabel.setText("Обработка завершена. Проверьте результаты.");
 
@@ -196,6 +231,10 @@ public class ImpositionWindow {
 
                     JOptionPane.showMessageDialog(frame, "Не удалось выполнить обработку: " + e.getCause(), "Ошибка", JOptionPane.ERROR_MESSAGE);
                 } finally {
+                    progressBar.setMinimum(0);
+                    progressBar.setMaximum(inputPaths.size());
+                    progressBar.setValue(0);
+                    progressBar.setString("Обработано 0 из " + inputPaths.size());
                     setProcessing(false);
                 }
             }

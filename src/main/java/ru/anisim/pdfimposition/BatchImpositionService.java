@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.util.function.IntConsumer;
+
 public class BatchImpositionService {
 
     private final PdfImpositionService pdfService;
@@ -15,12 +17,19 @@ public class BatchImpositionService {
     }
 
     public List<String> process(List<Path> inputPaths, Path destinationDirectory) {
+        return process(inputPaths, destinationDirectory, completed -> {
+        });
+    }
+
+    public List<String> process(List<Path> inputPaths, Path destinationDirectory, IntConsumer onProgress) {
         List<String> results = new ArrayList<>();
+        var completed = 0;
+
+        var outputDirectory = destinationDirectory.toAbsolutePath().normalize().resolve("спуски");
 
         for (var inputPath : inputPaths) {
             try {
                 var source = inputPath.toAbsolutePath().normalize();
-                var outputDirectory = destinationDirectory.toAbsolutePath().normalize().resolve("спуски");
 
                 Files.createDirectories(outputDirectory);
 
@@ -32,6 +41,9 @@ public class BatchImpositionService {
             } catch (IOException e) {
                 results.add("Ошибка: " + inputPath.getFileName() + " — " + e.getMessage());
             }
+
+            completed++;
+            onProgress.accept(completed);
         }
 
         return results;
