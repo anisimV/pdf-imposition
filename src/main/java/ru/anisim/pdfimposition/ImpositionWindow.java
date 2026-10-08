@@ -21,12 +21,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import javax.swing.JProgressBar;
+import java.awt.FileDialog;
+import java.util.Locale;
 
 public class ImpositionWindow {
 
     private final JFrame frame;
     private final JComboBox<String> formatBox;
     private final DefaultListModel<Path> filesModel;
+    private final JProgressBar progressBar;
+    private final NativeDirectoryChooser directoryChooser;
 
     private final JButton addButton;
     private final JButton clearButton;
@@ -34,6 +39,7 @@ public class ImpositionWindow {
     private final JLabel statusLabel;
 
     public ImpositionWindow() {
+        directoryChooser = new NativeDirectoryChooser();
         frame = new JFrame("Спуск PDF");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 450);
@@ -61,8 +67,16 @@ public class ImpositionWindow {
         controls.add(addButton);
         controls.add(clearButton);
 
+        progressBar = new JProgressBar();
+        progressBar.setStringPainted(true);
+        progressBar.setString("Ожидание");
+
+        var progressPanel = new JPanel(new BorderLayout(0, 5));
+        progressPanel.add(statusLabel, BorderLayout.NORTH);
+        progressPanel.add(progressBar, BorderLayout.CENTER);
+
         var bottomPanel = new JPanel(new BorderLayout(10, 0));
-        bottomPanel.add(statusLabel, BorderLayout.CENTER);
+        bottomPanel.add(progressPanel, BorderLayout.CENTER);
         bottomPanel.add(processButton, BorderLayout.EAST);
 
         var panel = new JPanel(new BorderLayout(10, 10));
@@ -82,49 +96,38 @@ public class ImpositionWindow {
     private void chooseFiles() {
         var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
 
-        var chooser = new JFileChooser(desktop);
+        var dialog = new FileDialog(frame, "Выберите PDF одного формата", FileDialog.LOAD);
 
-        chooser.setDialogTitle("Выберите PDF одного формата");
-        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        chooser.setMultiSelectionEnabled(true);
-        chooser.setFileFilter(new FileNameExtensionFilter("PDF-файлы", "pdf"));
-        chooser.setAcceptAllFileFilterUsed(false);
+        dialog.setDirectory(desktop.getAbsolutePath());
+        dialog.setMultipleMode(true);
 
-        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
+        try {
+            dialog.setVisible(true);
 
-        for (var file : chooser.getSelectedFiles()) {
-            var path = file.toPath().toAbsolutePath().normalize();
+            var selectedFiles = dialog.getFiles();
+            var skippedFiles = new ArrayList<String>();
 
-            if (!filesModel.contains(path)) {
-                filesModel.addElement(path);
+            for (var file : selectedFiles) {
+                var fileName = file.getName().toLowerCase(Locale.ROOT);
+
+                if (!file.isFile() || !fileName.endsWith(".pdf")) {
+                    skippedFiles.add(file.getName());
+                    continue;
+                }
+
+                var path = file.toPath().toAbsolutePath().normalize();
+
+                if (!filesModel.contains(path)) {
+                    filesModel.addElement(path);
+                }
             }
+
+            if (!skippedFiles.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Добавлены только PDF. Пропущены:\n" + String.join("\n", skippedFiles), "Выбор файлов", JOptionPane.WARNING_MESSAGE);
+            }
+        } finally {
+            dialog.dispose();
         }
-    }
-
-    private Path chooseDestinationDirectory() {
-        var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
-
-        var chooser = new JFileChooser(desktop);
-
-        chooser.setDialogTitle("Выберите папку, в которой создать папку «спуски»");
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setMultiSelectionEnabled(false);
-        chooser.setAcceptAllFileFilterUsed(false);
-
-        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
-            return null;
-        }
-
-        return chooser.getSelectedFile().toPath().toAbsolutePath().normalize();
-    }
-
-    private void setProcessing(boolean processing) {
-        formatBox.setEnabled(!processing);
-        addButton.setEnabled(!processing);
-        clearButton.setEnabled(!processing);
-        processButton.setEnabled(!processing);
     }
 
     private void processFiles() {
@@ -133,12 +136,43 @@ public class ImpositionWindow {
             return;
         }
 
-        // Одна папка назначения для всей партии.
-        var destinationDirectory = chooseDestinationDirectory();
+        var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
 
-        if (destinationDirectory == null) {
+        setProcessing(true);
+        statusLabel.setText("Выберите папку назначения.");
+
+        directoryChooser.choose(desktop, destinationDirectory -> {
+            setProcessing(false);
+
+            if (destinationDirectory == null) {
+                statusLabel.setText("Выбор папки отменён.");
+                return;
+            }
+
+            startProcessing(destinationDirectory);
+        }, error -> {
+            setProcessing(false);
+            statusLabel.setText("Не удалось выбрать папку.");
+
+            JOptionPane.showMessageDialog(frame, "Ошибка выбора папки: " + error.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
+        });
+    }
+
+
+    private void setProcessing(boolean processing) {
+        formatBox.setEnabled(!processing);
+        addButton.setEnabled(!processing);
+        clearButton.setEnabled(!processing);
+        processButton.setEnabled(!processing);
+    }
+
+    private void startProcessing(Path destinationDirectory) {
+        if (filesModel.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, "Сначала добавьте PDF-файлы.", "Файлы не выбраны", JOptionPane.WARNING_MESSAGE);
             return;
         }
+
+        // Одна папка назначения для всей партии.
 
         // Копируем пути до запуска фоновой обработки.
         var selectedPaths = new ArrayList<Path>();
@@ -165,17 +199,30 @@ public class ImpositionWindow {
         setProcessing(true);
         statusLabel.setText("Обработка " + layout.name() + ": файлов — " + inputPaths.size());
 
-        var worker = new SwingWorker<List<String>, Void>() {
+        var worker = new SwingWorker<List<String>, Integer>() {
 
             @Override
             protected List<String> doInBackground() {
-                return batchService.process(inputPaths, destinationDirectory);
+                return batchService.process(inputPaths, destinationDirectory, completed -> publish(completed));
+            }
+
+            @Override
+            protected void process(List<Integer> chunks) {
+                var completed = chunks.get(chunks.size() - 1);
+
+                progressBar.setValue(completed);
+                progressBar.setString("Обработано " + completed + " из " + inputPaths.size());
+
+                statusLabel.setText("Обработка " + layout.name() + ": " + completed + " из " + inputPaths.size());
             }
 
             @Override
             protected void done() {
                 try {
                     var results = get();
+
+                    progressBar.setValue(inputPaths.size());
+                    progressBar.setString("Обработано " + inputPaths.size() + " из " + inputPaths.size());
 
                     statusLabel.setText("Обработка завершена. Проверьте результаты.");
 
@@ -196,6 +243,10 @@ public class ImpositionWindow {
 
                     JOptionPane.showMessageDialog(frame, "Не удалось выполнить обработку: " + e.getCause(), "Ошибка", JOptionPane.ERROR_MESSAGE);
                 } finally {
+                    progressBar.setMinimum(0);
+                    progressBar.setMaximum(inputPaths.size());
+                    progressBar.setValue(0);
+                    progressBar.setString("Обработано 0 из " + inputPaths.size());
                     setProcessing(false);
                 }
             }
