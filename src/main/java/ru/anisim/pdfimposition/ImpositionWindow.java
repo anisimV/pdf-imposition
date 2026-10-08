@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import javax.swing.JProgressBar;
+import java.awt.FileDialog;
+import java.util.Locale;
 
 public class ImpositionWindow {
 
@@ -92,24 +94,37 @@ public class ImpositionWindow {
     private void chooseFiles() {
         var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
 
-        var chooser = new JFileChooser(desktop);
+        var dialog = new FileDialog(frame, "Выберите PDF одного формата", FileDialog.LOAD);
 
-        chooser.setDialogTitle("Выберите PDF одного формата");
-        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        chooser.setMultiSelectionEnabled(true);
-        chooser.setFileFilter(new FileNameExtensionFilter("PDF-файлы", "pdf"));
-        chooser.setAcceptAllFileFilterUsed(false);
+        dialog.setDirectory(desktop.getAbsolutePath());
+        dialog.setMultipleMode(true);
 
-        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
+        try {
+            dialog.setVisible(true);
 
-        for (var file : chooser.getSelectedFiles()) {
-            var path = file.toPath().toAbsolutePath().normalize();
+            var selectedFiles = dialog.getFiles();
+            var skippedFiles = new ArrayList<String>();
 
-            if (!filesModel.contains(path)) {
-                filesModel.addElement(path);
+            for (var file : selectedFiles) {
+                var fileName = file.getName().toLowerCase(Locale.ROOT);
+
+                if (!file.isFile() || !fileName.endsWith(".pdf")) {
+                    skippedFiles.add(file.getName());
+                    continue;
+                }
+
+                var path = file.toPath().toAbsolutePath().normalize();
+
+                if (!filesModel.contains(path)) {
+                    filesModel.addElement(path);
+                }
             }
+
+            if (!skippedFiles.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Добавлены только PDF. Пропущены:\n" + String.join("\n", skippedFiles), "Выбор файлов", JOptionPane.WARNING_MESSAGE);
+            }
+        } finally {
+            dialog.dispose();
         }
     }
 
@@ -179,11 +194,7 @@ public class ImpositionWindow {
 
             @Override
             protected List<String> doInBackground() {
-                return batchService.process(
-                        inputPaths,
-                        destinationDirectory,
-                        completed -> publish(completed)
-                );
+                return batchService.process(inputPaths, destinationDirectory, completed -> publish(completed));
             }
 
             @Override
@@ -191,14 +202,9 @@ public class ImpositionWindow {
                 var completed = chunks.get(chunks.size() - 1);
 
                 progressBar.setValue(completed);
-                progressBar.setString(
-                        "Обработано " + completed + " из " + inputPaths.size()
-                );
+                progressBar.setString("Обработано " + completed + " из " + inputPaths.size());
 
-                statusLabel.setText(
-                        "Обработка " + layout.name()
-                                + ": " + completed + " из " + inputPaths.size()
-                );
+                statusLabel.setText("Обработка " + layout.name() + ": " + completed + " из " + inputPaths.size());
             }
 
             @Override
@@ -207,10 +213,7 @@ public class ImpositionWindow {
                     var results = get();
 
                     progressBar.setValue(inputPaths.size());
-                    progressBar.setString(
-                            "Обработано " + inputPaths.size()
-                                    + " из " + inputPaths.size()
-                    );
+                    progressBar.setString("Обработано " + inputPaths.size() + " из " + inputPaths.size());
 
                     statusLabel.setText("Обработка завершена. Проверьте результаты.");
 
