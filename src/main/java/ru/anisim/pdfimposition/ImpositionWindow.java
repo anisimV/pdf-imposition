@@ -31,6 +31,7 @@ public class ImpositionWindow {
     private final JComboBox<String> formatBox;
     private final DefaultListModel<Path> filesModel;
     private final JProgressBar progressBar;
+    private final NativeDirectoryChooser directoryChooser;
 
     private final JButton addButton;
     private final JButton clearButton;
@@ -38,6 +39,7 @@ public class ImpositionWindow {
     private final JLabel statusLabel;
 
     public ImpositionWindow() {
+        directoryChooser = new NativeDirectoryChooser();
         frame = new JFrame("Спуск PDF");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 450);
@@ -128,22 +130,34 @@ public class ImpositionWindow {
         }
     }
 
-    private Path chooseDestinationDirectory() {
-        var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
-
-        var chooser = new JFileChooser(desktop);
-
-        chooser.setDialogTitle("Выберите папку, в которой создать папку «спуски»");
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setMultiSelectionEnabled(false);
-        chooser.setAcceptAllFileFilterUsed(false);
-
-        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
-            return null;
+    private void processFiles() {
+        if (filesModel.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, "Сначала добавьте PDF-файлы.", "Файлы не выбраны", JOptionPane.WARNING_MESSAGE);
+            return;
         }
 
-        return chooser.getSelectedFile().toPath().toAbsolutePath().normalize();
+        var desktop = FileSystemView.getFileSystemView().getHomeDirectory();
+
+        setProcessing(true);
+        statusLabel.setText("Выберите папку назначения.");
+
+        directoryChooser.choose(desktop, destinationDirectory -> {
+            setProcessing(false);
+
+            if (destinationDirectory == null) {
+                statusLabel.setText("Выбор папки отменён.");
+                return;
+            }
+
+            startProcessing(destinationDirectory);
+        }, error -> {
+            setProcessing(false);
+            statusLabel.setText("Не удалось выбрать папку.");
+
+            JOptionPane.showMessageDialog(frame, "Ошибка выбора папки: " + error.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
+        });
     }
+
 
     private void setProcessing(boolean processing) {
         formatBox.setEnabled(!processing);
@@ -152,18 +166,13 @@ public class ImpositionWindow {
         processButton.setEnabled(!processing);
     }
 
-    private void processFiles() {
+    private void startProcessing(Path destinationDirectory) {
         if (filesModel.isEmpty()) {
             JOptionPane.showMessageDialog(frame, "Сначала добавьте PDF-файлы.", "Файлы не выбраны", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         // Одна папка назначения для всей партии.
-        var destinationDirectory = chooseDestinationDirectory();
-
-        if (destinationDirectory == null) {
-            return;
-        }
 
         // Копируем пути до запуска фоновой обработки.
         var selectedPaths = new ArrayList<Path>();
