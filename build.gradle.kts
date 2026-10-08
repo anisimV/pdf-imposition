@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("org.openjfx.javafxplugin") version "0.1.0"
 }
 
 group = "ru.anisim"
@@ -17,6 +18,11 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:6.0.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+javafx {
+    version = "21.0.2"
+    modules("javafx.swing")
 }
 
 tasks.test {
